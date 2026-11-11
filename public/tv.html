@@ -1,1 +1,43 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MAIA KARAOKÊ — Tela da TV</title><link rel="stylesheet" href="/style.css"><style>body{background:#08090c}main{max-width:1500px}.tvtitle{text-align:center;font-size:clamp(25px,4vw,54px);font-weight:900}.tvname{text-align:center;color:#e8c778;font-size:clamp(17px,2vw,28px);margin:12px}.tvvideo{width:100%;aspect-ratio:16/9;background:#000;border:0;border-radius:12px}</style></head><body><header><h1>MAIA KARAOKÊ</h1><p>Tela de reprodução</p></header><main><div class="tvtitle" id="songTitle">Aguardando a próxima música</div><div class="tvname" id="singer"></div><div id="video"></div><p class="muted" style="text-align:center">Esta tela recebe a música selecionada no painel administrativo.</p></main><script src="/socket.io/socket.io.js"></script><script>const panel=location.pathname.split('/').pop(),$=id=>document.getElementById(id);function show(s){if(!s?.videoId)return;$('songTitle').textContent=s.title||'Música selecionada';$('singer').textContent=s.singer?'🎤 '+s.singer:'';$('video').innerHTML='<iframe class="tvvideo" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen src="https://www.youtube.com/embed/'+encodeURIComponent(s.videoId)+'?autoplay=1"></iframe>'}fetch('/api/panels/'+panel+'/song').then(r=>r.json()).then(show);const socket=io();socket.emit('join-panel',panel);socket.on('song:update',show);</script></body></html>
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MAIA KARAOKÊ — Tela da TV</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+body{background:#08090c}main{max-width:1500px}.tvtitle{text-align:center;font-size:clamp(25px,4vw,54px);font-weight:900}.tvname{text-align:center;color:#e8c778;font-size:clamp(17px,2vw,28px);margin:12px}.tvvideo{width:100%;aspect-ratio:16/9;background:#000;border:0;border-radius:12px}
+#nextAlert{display:none;position:fixed;inset:0;z-index:20;background:rgba(4,6,12,.97);align-items:center;justify-content:center;text-align:center;padding:24px}
+#nextAlert.show{display:flex;animation:alertIn .35s ease-out}
+.alertBox{max-width:1100px;width:100%;border:3px solid #e8c778;border-radius:28px;padding:clamp(25px,6vw,70px);background:linear-gradient(145deg,#25202a,#10131b);box-shadow:0 0 55px #b68b4566}
+.alertSmall{color:#e8c778;font-size:clamp(20px,3vw,36px);font-weight:800;letter-spacing:.08em}
+.alertName{font-size:clamp(42px,10vw,110px);font-weight:950;line-height:1.05;margin:25px 0;color:#fff;overflow-wrap:anywhere}
+.alertText{font-size:clamp(22px,4vw,46px);font-weight:850}
+#soundEnable{display:block;margin:12px auto 22px;padding:13px 22px;border:0;border-radius:10px;background:#b68b45;color:#111;font-size:18px;font-weight:800}
+@keyframes alertIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+</style>
+</head>
+<body>
+<header><h1>MAIA KARAOKÊ</h1><p>Tela de reprodução</p></header>
+<button id="soundEnable" type="button">🔊 ATIVAR AVISOS SONOROS</button>
+<main>
+<div class="tvtitle" id="songTitle">Aguardando a próxima música</div>
+<div class="tvname" id="singer"></div>
+<div id="video"></div>
+<section class="card" style="margin-top:18px"><h2>🎤 Fila de participantes</h2><div id="currentSinger" class="current">Ninguém cantando agora</div><ol id="tvQueue"></ol></section>
+<p class="muted" style="text-align:center">Esta tela recebe a música e os avisos da fila em tempo real.</p>
+</main>
+<div id="nextAlert" role="alert" aria-live="assertive"><div class="alertBox"><div class="alertSmall">🎤 ATENÇÃO!</div><div class="alertName" id="alertName"></div><div class="alertText">PREPARE-SE! VOCÊ É O PRÓXIMO A CANTAR!</div></div></div>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const panel=location.pathname.split('/').pop(),$=id=>document.getElementById(id);
+let audioContext=null,soundEnabled=false,lastSingerId=null,alertTimer=null;
+function show(s){if(!s?.videoId)return;$('songTitle').textContent=s.title||'Música selecionada';$('singer').textContent=s.singer?'🎤 '+s.singer:'';$('video').innerHTML='<iframe class="tvvideo" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen src="https://www.youtube.com/embed/'+encodeURIComponent(s.videoId)+'?autoplay=1"></iframe>'}
+function beep(){if(!soundEnabled||!audioContext)return;try{[0,1,2].forEach((n)=>{const osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.value=[880,1046,1318][n];gain.gain.setValueAtTime(.0001,audioContext.currentTime+n*.22);gain.gain.exponentialRampToValueAtTime(.22,audioContext.currentTime+n*.22+.02);gain.gain.exponentialRampToValueAtTime(.0001,audioContext.currentTime+n*.22+.18);osc.connect(gain);gain.connect(audioContext.destination);osc.start(audioContext.currentTime+n*.22);osc.stop(audioContext.currentTime+n*.22+.2)})}catch(e){}}
+function announce(name){$('alertName').textContent=name;$('nextAlert').classList.add('show');clearTimeout(alertTimer);alertTimer=setTimeout(()=>$('nextAlert').classList.remove('show'),8000);beep();if(soundEnabled&&'speechSynthesis'in window){speechSynthesis.cancel();const msg=new SpeechSynthesisUtterance('Atenção! '+name+', prepare-se. Você é a próxima pessoa a cantar no MAIA KARAOKÊ!');msg.lang='pt-BR';msg.rate=.95;speechSynthesis.speak(msg)}}
+$('soundEnable').addEventListener('click',async()=>{try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){audioContext=new AC();await audioContext.resume()}soundEnabled=true;$('soundEnable').textContent='✓ AVISOS SONOROS ATIVADOS';$('soundEnable').disabled=true;beep()}catch(e){$('soundEnable').textContent='Não foi possível ativar o som neste navegador'}});
+function drawQueue(q){const current=q.current;$('currentSinger').textContent=current?current.name+' — Cantando agora':'Ninguém cantando agora';$('tvQueue').innerHTML='';(q.waiting||[]).forEach((x,i)=>{const li=document.createElement('li');li.textContent=(i+1)+'. '+x.name+' — '+(x.status==='done'?'Já cantou':'Aguardando');$('tvQueue').append(li)});if(current&&current.id!==lastSingerId){lastSingerId=current.id;announce(current.name)}if(!current)lastSingerId=null}
+fetch('/api/panels/'+panel+'/song').then(r=>r.json()).then(show);
+fetch('/api/queue/'+panel).then(r=>r.json()).then(drawQueue);
+const socket=io();socket.emit('join-panel',panel);socket.on('song:update',show);socket.on('queue:update',drawQueue);
+</script>
+</body></html>
