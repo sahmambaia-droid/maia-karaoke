@@ -44,8 +44,8 @@ const master=(req,res,next)=>req.session.user?.role==='master'?next():res.status
 const operator=(req,res,next)=>['master','admin','operator'].includes(req.session.user?.role)?next():res.status(403).json({error:'Acesso não autorizado.'});
 const getPanel=id=>db.prepare('SELECT * FROM panels WHERE id=?').get(id);
 function queueState(id){
- const current=db.prepare("SELECT id,name FROM queue WHERE panel_id=? AND status='singing' ORDER BY id LIMIT 1").get(id)||null;
- const waiting=db.prepare("SELECT id,name,created_at FROM queue WHERE panel_id=? AND status='waiting' ORDER BY id").all(id);
+ const current=db.prepare("SELECT id,name,status FROM queue WHERE panel_id=? AND status='singing' ORDER BY id LIMIT 1").get(id)||null;
+ const waiting=db.prepare("SELECT id,name,status,created_at FROM queue WHERE panel_id=? AND status!='singing' ORDER BY id").all(id);
  return {current,waiting};
 }
 function emitQueue(id){io.to('panel:'+id).emit('queue:update',queueState(id))}
@@ -102,7 +102,14 @@ app.post('/api/queue/:panelId/start',auth,validPanel,(req,res)=>{
  emitQueue(id);res.json(queueState(id));
 });
 app.delete('/api/queue/:panelId/:entryId',auth,validPanel,(req,res)=>{
- db.prepare('DELETE FROM queue WHERE id=? AND panel_id=?').run(Number(req.params.entryId),req.params.panelId);emitQueue(req.params.panelId);res.json({ok:true});
+ const id=req.params.panelId,entryId=Number(req.params.entryId);
+ const entry=db.prepare('SELECT status FROM queue WHERE id=? AND panel_id=?').get(entryId,id);
+ db.prepare('DELETE FROM queue WHERE id=? AND panel_id=?').run(entryId,id);
+ if(entry?.status==='singing'){
+  const next=db.prepare("SELECT id FROM queue WHERE panel_id=? AND status='waiting' ORDER BY id LIMIT 1").get(id);
+  if(next)db.prepare("UPDATE queue SET status='singing' WHERE id=?").run(next.id);
+ }
+ emitQueue(id);res.json(queueState(id));
 });
 app.get('/api/panels/:panelId/session',validPanel,(req,res)=>res.json(sessionState(req.params.panelId)));
 app.post('/api/panels/:panelId/session',auth,validPanel,(req,res)=>{
