@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: maia-karaoke
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: maia-karaoke-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: MASTER_USERNAME
+        value: fabricio
+      - key: MASTER_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: PIX_KEY
+        value: 27996447565
+      - key: WHATSAPP_NUMBER
+        value: 5527996447565
