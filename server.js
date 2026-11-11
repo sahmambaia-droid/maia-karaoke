@@ -15,6 +15,7 @@ import crypto from 'crypto';
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const dataDir=process.env.DATA_DIR||__dirname;
 const app=express(),server=http.createServer(app),io=new Server(server);
+app.set('trust proxy', 1);
 const db=new Database(path.join(dataDir,'maia.sqlite'));
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
